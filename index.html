@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>内線電話帳</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --text-color: #333;
+            --num-color: #e74c3c;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            background: var(--primary-color);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .search-container {
+            width: 90%;
+            max-width: 600px;
+            margin: 10px auto;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 20px;
+            border-radius: 30px;
+            border: none;
+            outline: none;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .edit-toggle {
+            position: absolute;
+            right: 20px;
+            top: 25px;
+            background: none;
+            border: 1px solid white;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* 部署ごとのセクション分け用（オプション） */
+        .dept-title {
+            grid-column: 1 / -1;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 20px;
+            border-left: 8px solid var(--accent-color);
+            padding-left: 15px;
+            color: var(--primary-color);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: transform 0.2s;
+            border: 1px solid #eee;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .card-dept {
+            font-size: 16px;
+            color: #7f8c8d;
+            margin-bottom: 8px;
+        }
+
+        .card-name {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+
+        .card-number {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--num-color);
+            font-family: 'Verdana', sans-serif;
+            letter-spacing: 2px;
+        }
+
+        /* 編集モード */
+        .edit-controls {
+            display: none;
+            margin-top: 15px;
+            gap: 10px;
+        }
+        body.edit-mode .edit-controls { display: flex; }
+        body.edit-mode .card { border: 2px dashed var(--accent-color); }
+
+        .btn {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-edit { background: #f1c40f; color: black; }
+        .btn-add { background: #2ecc71; color: white; padding: 15px 30px; font-size: 18px; margin: 20px; }
+
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 18px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 600px) {
+            .card-name { font-size: 24px; }
+            .card-number { font-size: 36px; }
+        }
+    </style>
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js');
+        }
+    </script>
+</head>
+<body>
+
+<header>
+    <h1>内線電話帳</h1>
+    <div class="search-container">
+        <input type="search" id="search-input" placeholder="名前・部署・番号で検索...">
+    </div>
+    <button class="edit-toggle" id="toggle-edit">⚙️ 編集モード</button>
+</header>
+
+<div class="container" id="phonebook-container">
+    <!-- JSで生成 -->
+</div>
+
+<button class="btn btn-add" id="add-btn" style="display:none;">＋ 新規連絡先を追加</button>
+
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <h2 id="modal-title">連絡先の追加</h2>
+        <input type="text" id="in-dept" placeholder="部署名">
+        <input type="text" id="in-name" placeholder="名前">
+        <input type="tel" id="in-num" placeholder="内線番号">
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn" id="save-btn" style="background:var(--accent-color); color:white; flex:1;">保存</button>
+            <button class="btn" id="delete-btn" style="background:var(--num-color); color:white; display:none;">削除</button>
+            <button class="btn" id="cancel-btn" style="background:#95a5a6; color:white;">キャンセル</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'ext_phonebook_data_v1';
+    let contacts = [];
+    let editMode = false;
+    let currentEditId = null;
+
+    // 初期データ
+    const defaultData = [
+        { id: 1, dept: "代表", name: "受付", num: "100" },
+        { id: 2, dept: "営業部", name: "営業第一課", num: "201" },
+        { id: 3, dept: "営業部", name: "営業第二課", num: "202" },
+        { id: 4, dept: "総務部", name: "総務課", num: "301" },
+        { id: 5, dept: "総務部", name: "経理課", num: "305" },
+        { id: 6, dept: "情報システム", name: "ヘルプデスク", num: "900" },
+    ];
+
+    function loadData() {
+        const data = localStorage.getItem(STORAGE_KEY);
+        contacts = data ? JSON.parse(data) : defaultData;
+        render();
+    }
+
+    function saveData() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
+        render();
+    }
+
+    function render() {
+        const container = document.getElementById('phonebook-container');
+        const query = document.getElementById('search-input').value.toLowerCase();
+        container.innerHTML = '';
+
+        // 部署でソート
+        const sorted = [...contacts].sort((a, b) => a.dept.localeCompare(b.dept, 'ja'));
+
+        let lastDept = '';
+        sorted.forEach(c => {
+            if (query && !c.name.toLowerCase().includes(query) && !c.num.includes(query) && !c.dept.toLowerCase().includes(query)) return;
+
+            if (c.dept !== lastDept && !query) {
+                const title = document.createElement('div');
+                title.className = 'dept-title';
+                title.textContent = c.dept || "その他";
+                container.appendChild(title);
+                lastDept = c.dept;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="card-dept">${c.dept}</div>
+                <div class="card-name">${c.name}</div>
+                <div class="card-number">${c.num}</div>
+                <div class="edit-controls">
+                    <button class="btn btn-edit" onclick="openModal(${c.id})">編集する</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // イベント
+    document.getElementById('search-input').oninput = render;
+    
+    document.getElementById('toggle-edit').onclick = function() {
+        editMode = !editMode;
+        document.body.classList.toggle('edit-mode', editMode);
+        document.getElementById('add-btn').style.display = editMode ? 'block' : 'none';
+        this.textContent = editMode ? '✅ 編集を終了' : '⚙️ 編集モード';
+        render();
+    };
+
+    const modal = document.getElementById('modal');
+    function openModal(id = null) {
+        currentEditId = id;
+        const c = contacts.find(x => x.id === id);
+        document.getElementById('modal-title').textContent = id ? "連絡先を編集" : "新規追加";
+        document.getElementById('in-dept').value = c ? c.dept : "";
+        document.getElementById('in-name').value = c ? c.name : "";
+        document.getElementById('in-num').value = c ? c.num : "";
+        document.getElementById('delete-btn').style.display = id ? "block" : "none";
+        modal.style.display = 'flex';
+    }
+
+    document.getElementById('add-btn').onclick = () => openModal();
+    document.getElementById('cancel-btn').onclick = () => modal.style.display = 'none';
+
+    document.getElementById('save-btn').onclick = function() {
+        const dept = document.getElementById('in-dept').value;
+        const name = document.getElementById('in-name').value;
+        const num = document.getElementById('in-num').value;
+        if (!name || !num) return alert("名前と番号を入力してください");
+
+        if (currentEditId) {
+            const idx = contacts.findIndex(x => x.id === currentEditId);
+            contacts[idx] = { id: currentEditId, dept, name, num };
+        } else {
+            contacts.push({ id: Date.now(), dept, name, num });
+        }
+        saveData();
+        modal.style.display = 'none';
+    };
+
+    document.getElementById('delete-btn').onclick = function() {
+        if (!confirm("削除しますか？")) return;
+        contacts = contacts.filter(x => x.id !== currentEditId);
+        saveData();
+        modal.style.display = 'none';
+    };
+
+    window.onclick = (e) => { if(e.target == modal) modal.style.display = 'none'; };
+
+    loadData();
+</script>
+
+</body>
+</html>
