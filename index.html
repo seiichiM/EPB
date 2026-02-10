@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内線電話帳 v2</title>
+    <title>内線電話帳 v3 (Save/Load)</title>
     <style>
         :root {
             --bg-color: #f4f7f6;
@@ -25,12 +25,11 @@
             align-items: center;
         }
 
-        /* ヘッダーを最小化 */
         header {
             width: 100%;
             background: var(--primary-color);
             color: white;
-            padding: 8px 0; /* 高さを縮小 */
+            padding: 8px 0;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -54,7 +53,7 @@
 
         #search-input {
             width: 100%;
-            padding: 10px 15px; /* 入力欄も少しスリムに */
+            padding: 10px 15px;
             font-size: 18px;
             border-radius: 25px;
             border: none;
@@ -72,6 +71,18 @@
             font-size: 13px;
             white-space: nowrap;
         }
+
+        /* 編集メニュー（インポート/エクスポート） */
+        .admin-menu {
+            width: 100%;
+            background: #ecf0f1;
+            padding: 10px 0;
+            display: none;
+            justify-content: center;
+            gap: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        body.edit-mode .admin-menu { display: flex; }
 
         .container {
             width: 95%;
@@ -124,7 +135,6 @@
             letter-spacing: 2px;
         }
 
-        /* 編集モード */
         .edit-controls {
             display: none;
             margin-top: 12px;
@@ -134,16 +144,18 @@
         body.edit-mode .card { border: 2px dashed var(--accent-color); }
 
         .btn {
-            padding: 8px;
+            padding: 8px 15px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 14px;
         }
         .btn-edit { background: #f1c40f; color: black; flex: 1; }
         .btn-add { background: #2ecc71; color: white; padding: 15px 30px; font-size: 18px; margin: 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-save { background: #34495e; color: white; }
+        .btn-load { background: #7f8c8d; color: white; }
 
-        /* モーダル */
         .modal {
             display: none;
             position: fixed;
@@ -196,6 +208,12 @@
     </div>
 </header>
 
+<div class="admin-menu">
+    <button class="btn btn-save" id="export-btn">📥 データを保存 (ファイル作成)</button>
+    <button class="btn btn-load" id="import-btn">📤 データを読込 (ファイル選択)</button>
+    <input type="file" id="file-input" style="display:none;" accept=".json">
+</div>
+
 <div class="container" id="phonebook-container">
     <!-- JSで生成 -->
 </div>
@@ -217,12 +235,11 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'ext_phonebook_data_v2';
+    const STORAGE_KEY = 'ext_phonebook_data_v3';
     let contacts = [];
     let editMode = false;
     let currentEditId = null;
 
-    // 初期データ
     const defaultData = [
         { id: 1, dept: "代表", name: "受付", num: "100" },
         { id: 2, dept: "営業部", name: "営業第一課", num: "201" },
@@ -234,7 +251,14 @@
 
     function loadData() {
         const data = localStorage.getItem(STORAGE_KEY);
-        contacts = data ? JSON.parse(data) : defaultData;
+        // v2のデータがあれば引き継ぐ
+        const oldData = localStorage.getItem('ext_phonebook_data_v2');
+        if (!data && oldData) {
+            contacts = JSON.parse(oldData);
+            saveData();
+        } else {
+            contacts = data ? JSON.parse(data) : defaultData;
+        }
         render();
     }
 
@@ -278,6 +302,56 @@
             container.appendChild(card);
         });
     }
+
+    // --- Save/Load Logic ---
+    
+    // エクスポート（保存）
+    document.getElementById('export-btn').onclick = function() {
+        const dataStr = JSON.stringify(contacts, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `phonebook_data_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // インポート（読込）
+    const fileInput = document.getElementById('file-input');
+    document.getElementById('import-btn').onclick = () => fileInput.click();
+
+    fileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!confirm("ファイルから読み込みますか？現在のデータは上書きされます。")) {
+            fileInput.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const imported = JSON.parse(event.target.result);
+                if (Array.isArray(imported)) {
+                    contacts = imported;
+                    saveData();
+                    alert("読込が完了しました。");
+                } else {
+                    throw new Error("形式が正しくありません");
+                }
+            } catch (err) {
+                alert("エラー: ファイルを読み込めませんでした。正しい形式のJSONファイルを選択してください。");
+            }
+            fileInput.value = '';
+        };
+        reader.readAsText(file);
+    };
+
+    // --- Original Logic ---
 
     document.getElementById('search-input').oninput = render;
     
