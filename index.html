@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内線電話帳 v3 (Save/Load)</title>
+    <title>内線電話帳 v4 (Reorder)</title>
     <style>
         :root {
             --bg-color: #f4f7f6;
@@ -72,14 +72,14 @@
             white-space: nowrap;
         }
 
-        /* 編集メニュー（インポート/エクスポート） */
         .admin-menu {
             width: 100%;
             background: #ecf0f1;
             padding: 10px 0;
             display: none;
             justify-content: center;
-            gap: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
             border-bottom: 1px solid #ddd;
         }
         body.edit-mode .admin-menu { display: flex; }
@@ -92,6 +92,9 @@
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 15px;
         }
+
+        /* 並び替え時は部署タイトルを非表示にする（混乱を防ぐため） */
+        body.edit-mode .dept-title { display: none; }
 
         .dept-title {
             grid-column: 1 / -1;
@@ -112,6 +115,7 @@
             flex-direction: column;
             justify-content: center;
             border: 1px solid #eee;
+            position: relative;
         }
 
         .card-dept {
@@ -139,22 +143,31 @@
             display: none;
             margin-top: 12px;
             gap: 8px;
+            flex-wrap: wrap;
         }
         body.edit-mode .edit-controls { display: flex; }
         body.edit-mode .card { border: 2px dashed var(--accent-color); }
 
+        .reorder-btns {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
         .btn {
-            padding: 8px 15px;
+            padding: 8px 12px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
         }
         .btn-edit { background: #f1c40f; color: black; flex: 1; }
+        .btn-reorder { background: #34495e; color: white; flex: 1; font-size: 18px; }
         .btn-add { background: #2ecc71; color: white; padding: 15px 30px; font-size: 18px; margin: 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .btn-save { background: #34495e; color: white; }
         .btn-load { background: #7f8c8d; color: white; }
+        .btn-reset { background: #e67e22; color: white; }
 
         .modal {
             display: none;
@@ -209,8 +222,9 @@
 </header>
 
 <div class="admin-menu">
-    <button class="btn btn-save" id="export-btn">📥 データを保存 (ファイル作成)</button>
-    <button class="btn btn-load" id="import-btn">📤 データを読込 (ファイル選択)</button>
+    <button class="btn btn-save" id="export-btn">📥 保存</button>
+    <button class="btn btn-load" id="import-btn">📤 読込</button>
+    <button class="btn btn-reset" id="reset-sort-btn">🔄 部署・名前順にリセット</button>
     <input type="file" id="file-input" style="display:none;" accept=".json">
 </div>
 
@@ -235,29 +249,34 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'ext_phonebook_data_v3';
+    const STORAGE_KEY = 'ext_phonebook_data_v4';
     let contacts = [];
     let editMode = false;
     let currentEditId = null;
 
     const defaultData = [
-        { id: 1, dept: "代表", name: "受付", num: "100" },
-        { id: 2, dept: "営業部", name: "営業第一課", num: "201" },
-        { id: 3, dept: "営業部", name: "営業第二課", num: "202" },
-        { id: 4, dept: "総務部", name: "総務課", num: "301" },
-        { id: 5, dept: "総務部", name: "経理課", num: "305" },
-        { id: 6, dept: "情報システム", name: "ヘルプデスク", num: "900" },
+        { id: 1, dept: "代表", name: "受付", num: "100", order: 0 },
+        { id: 2, dept: "営業部", name: "営業第一課", num: "201", order: 1 },
+        { id: 3, dept: "営業部", name: "営業第二課", num: "202", order: 2 },
+        { id: 4, dept: "総務部", name: "総務課", num: "301", order: 3 },
+        { id: 5, dept: "総務部", name: "経理課", num: "305", order: 4 },
+        { id: 6, dept: "情報システム", name: "ヘルプデスク", num: "900", order: 5 },
     ];
 
     function loadData() {
         const data = localStorage.getItem(STORAGE_KEY);
-        // v2のデータがあれば引き継ぐ
-        const oldData = localStorage.getItem('ext_phonebook_data_v2');
+        // v3のデータがあれば引き継ぎ
+        const oldData = localStorage.getItem('ext_phonebook_data_v3') || localStorage.getItem('ext_phonebook_data_v2');
+        
         if (!data && oldData) {
             contacts = JSON.parse(oldData);
+            // order プロパティを付与
+            contacts.forEach((c, i) => c.order = i);
             saveData();
+        } else if (data) {
+            contacts = JSON.parse(data);
         } else {
-            contacts = data ? JSON.parse(data) : defaultData;
+            contacts = [...defaultData];
         }
         render();
     }
@@ -272,16 +291,15 @@
         const query = document.getElementById('search-input').value.toLowerCase();
         container.innerHTML = '';
 
-        const sorted = [...contacts].sort((a, b) => {
-            const deptComp = (a.dept || "").localeCompare(b.dept || "", 'ja');
-            return deptComp !== 0 ? deptComp : (a.name || "").localeCompare(b.name || "", 'ja');
-        });
+        // order順でソートして表示
+        const sorted = [...contacts].sort((a, b) => (a.order || 0) - (b.order || 0));
 
         let lastDept = '___NONE___';
-        sorted.forEach(c => {
+        sorted.forEach((c, index) => {
             if (query && !c.name.toLowerCase().includes(query) && !c.num.includes(query) && !c.dept.toLowerCase().includes(query)) return;
 
-            if (c.dept !== lastDept && !query) {
+            // 編集モード以外、かつ検索中でない場合に部署タイトルを表示
+            if (!editMode && !query && c.dept !== lastDept) {
                 const title = document.createElement('div');
                 title.className = 'dept-title';
                 title.textContent = c.dept || "部署未設定";
@@ -296,65 +314,82 @@
                 <div class="card-name">${c.name}</div>
                 <div class="card-number">${c.num}</div>
                 <div class="edit-controls">
-                    <button class="btn btn-edit" onclick="openModal(${c.id})">編集</button>
+                    <div class="reorder-btns" style="width:100%;">
+                        <button class="btn btn-reorder" onclick="moveItem(${index}, -1)">▲</button>
+                        <button class="btn btn-reorder" onclick="moveItem(${index}, 1)">▼</button>
+                    </div>
+                    <button class="btn btn-edit" onclick="openModal(${c.id})">編集・削除</button>
                 </div>
             `;
             container.appendChild(card);
         });
     }
 
-    // --- Save/Load Logic ---
-    
-    // エクスポート（保存）
+    // --- 並び替えロジック ---
+    window.moveItem = function(index, direction) {
+        const sorted = [...contacts].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const targetIndex = index + direction;
+
+        if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+        // orderを入れ替え
+        const temp = sorted[index].order;
+        sorted[index].order = sorted[targetIndex].order;
+        sorted[targetIndex].order = temp;
+
+        saveData();
+    };
+
+    // 自動整列リセット
+    document.getElementById('reset-sort-btn').onclick = function() {
+        if (!confirm("部署・名前順で並び替えてよろしいですか？現在の自由な並び順はリセットされます。")) return;
+        
+        contacts.sort((a, b) => {
+            const deptComp = (a.dept || "").localeCompare(b.dept || "", 'ja');
+            return deptComp !== 0 ? deptComp : (a.name || "").localeCompare(b.name || "", 'ja');
+        });
+
+        // 確定した順序でorderを振り直す
+        contacts.forEach((c, i) => c.order = i);
+        saveData();
+    };
+
+    // --- インポート/エクスポート ---
     document.getElementById('export-btn').onclick = function() {
         const dataStr = JSON.stringify(contacts, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `phonebook_data_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
+        a.download = `phonebook_v4_data_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
-        document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
-    // インポート（読込）
     const fileInput = document.getElementById('file-input');
     document.getElementById('import-btn').onclick = () => fileInput.click();
-
     fileInput.onchange = function(e) {
         const file = e.target.files[0];
         if (!file) return;
-
-        if (!confirm("ファイルから読み込みますか？現在のデータは上書きされます。")) {
-            fileInput.value = '';
-            return;
-        }
-
         const reader = new FileReader();
         reader.onload = function(event) {
             try {
                 const imported = JSON.parse(event.target.result);
                 if (Array.isArray(imported)) {
                     contacts = imported;
+                    // order が無い古い形式の場合に備えて補完
+                    contacts.forEach((c, i) => { if(c.order === undefined) c.order = i; });
                     saveData();
-                    alert("読込が完了しました。");
-                } else {
-                    throw new Error("形式が正しくありません");
+                    alert("読込完了");
                 }
-            } catch (err) {
-                alert("エラー: ファイルを読み込めませんでした。正しい形式のJSONファイルを選択してください。");
-            }
+            } catch (err) { alert("読込エラー"); }
             fileInput.value = '';
         };
         reader.readAsText(file);
     };
 
-    // --- Original Logic ---
-
+    // --- 基本操作 ---
     document.getElementById('search-input').oninput = render;
-    
     document.getElementById('toggle-edit').onclick = function() {
         editMode = !editMode;
         document.body.classList.toggle('edit-mode', editMode);
@@ -383,13 +418,14 @@
         const dept = document.getElementById('in-dept').value.trim();
         const name = document.getElementById('in-name').value.trim();
         const num = document.getElementById('in-num').value.trim();
-        if (!name || !num) return alert("名前と番号を入力してください");
+        if (!name || !num) return alert("入力してください");
 
         if (currentEditId) {
             const idx = contacts.findIndex(x => x.id === currentEditId);
-            contacts[idx] = { id: currentEditId, dept, name, num };
+            contacts[idx] = { ...contacts[idx], dept, name, num };
         } else {
-            contacts.push({ id: Date.now(), dept, name, num });
+            const maxOrder = contacts.reduce((max, c) => Math.max(max, c.order || 0), -1);
+            contacts.push({ id: Date.now(), dept, name, num, order: maxOrder + 1 });
         }
         saveData();
         modal.style.display = 'none';
