@@ -164,7 +164,7 @@
         }
         .btn-edit { background: #f1c40f; color: black; flex: 1; }
         .btn-reorder { background: #34495e; color: white; flex: 1; font-size: 18px; }
-        .btn-add { background: #2ecc71; color: white; padding: 15px 30px; font-size: 18px; margin: 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-add { background: #2ecc71; color: white; }
         .btn-save { background: #34495e; color: white; }
         .btn-load { background: #7f8c8d; color: white; }
         .btn-reset { background: #e67e22; color: white; }
@@ -222,6 +222,7 @@
 </header>
 
 <div class="admin-menu">
+    <button class="btn btn-add" id="add-btn">＋ 新規登録</button>
     <button class="btn btn-save" id="export-btn">📥 保存</button>
     <button class="btn btn-load" id="import-btn">📤 読込</button>
     <button class="btn btn-reset" id="reset-sort-btn">🔄 部署・名前順にリセット</button>
@@ -231,8 +232,6 @@
 <div class="container" id="phonebook-container">
     <!-- JSで生成 -->
 </div>
-
-<button class="btn btn-add" id="add-btn" style="display:none;">＋ 新規登録</button>
 
 <div class="modal" id="modal">
     <div class="modal-content">
@@ -393,7 +392,8 @@
     document.getElementById('toggle-edit').onclick = function() {
         editMode = !editMode;
         document.body.classList.toggle('edit-mode', editMode);
-        document.getElementById('add-btn').style.display = editMode ? 'block' : 'none';
+        // add-btn は CSS で .admin-menu 全体が表示されるので、ここでの制御は不要（常に .admin-menu 内にあるため）
+        // ただし、admin-menuはflexになるので、add-btn自体のdisplay:none制御は削除するか、admin-menuに委ねる
         this.textContent = editMode ? '✅ 完了' : '⚙️ 編集';
         render();
     };
