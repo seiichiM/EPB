@@ -368,8 +368,8 @@
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const timeStr = `${hours}:${minutes}`;
         
-        // 要求仕様: 【今の時間「部署名」の「名前」さんから電話がありました。内線番号は「電話番号」です。】
-        const textToCopy = `【${timeStr} 「${dept}」の「${name}」さんから電話がありました。内線番号は「${num}」です。】`;
+        // 要求仕様: HH:MM 部署名の名前さんから電話がありました。内線番号は番号です。
+        const textToCopy = `${timeStr} ${dept}の${name}さんから電話がありました。内線番号は${num}です。`;
         
         navigator.clipboard.writeText(textToCopy).then(() => {
             showToast("着信メモをコピーしました📋");
