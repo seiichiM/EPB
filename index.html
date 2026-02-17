@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内線電話帳 v4 (Reorder)</title>
+    <title>内線電話帳 v5 (Action)</title>
     <style>
         :root {
             --bg-color: #f4f7f6;
@@ -116,19 +116,27 @@
             justify-content: center;
             border: 1px solid #eee;
             position: relative;
+            transition: transform 0.1s;
+        }
+        
+        /* 名前部分を右クリック対象として強調 */
+        .card-name {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            line-height: 1.2;
+            cursor: context-menu; /* 右クリック可能を示すカーソル */
+            user-select: none; /* テキスト選択を防ぐ（誤操作防止） */
+        }
+        
+        .card-name:active {
+            transform: scale(0.98);
         }
 
         .card-dept {
             font-size: 14px;
             color: #7f8c8d;
             margin-bottom: 4px;
-        }
-
-        .card-name {
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            line-height: 1.2;
         }
 
         .card-number {
@@ -194,6 +202,30 @@
             box-sizing: border-box;
         }
 
+        /* トースト通知 */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            margin-left: -125px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+            font-size: 17px;
+            opacity: 0;
+            transition: opacity 0.5s, bottom 0.5s;
+        }
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 50px;
+        }
+
         @media (max-width: 600px) {
             .card-name { font-size: 24px; }
             .card-number { font-size: 38px; }
@@ -233,6 +265,9 @@
     <!-- JSで生成 -->
 </div>
 
+<!-- トースト通知 -->
+<div id="toast">コピーしました</div>
+
 <div class="modal" id="modal">
     <div class="modal-content">
         <h2 id="modal-title" style="margin-top:0;">連絡先編集</h2>
@@ -248,7 +283,7 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'ext_phonebook_data_v4';
+    const STORAGE_KEY = 'ext_phonebook_data_v5';
     let contacts = [];
     let editMode = false;
     let currentEditId = null;
@@ -264,13 +299,13 @@
 
     function loadData() {
         const data = localStorage.getItem(STORAGE_KEY);
-        // v3のデータがあれば引き継ぎ
-        const oldData = localStorage.getItem('ext_phonebook_data_v3') || localStorage.getItem('ext_phonebook_data_v2');
+        // v4以前のデータがあれば引き継ぎ
+        const oldData = localStorage.getItem('ext_phonebook_data_v4') || localStorage.getItem('ext_phonebook_data_v3');
         
         if (!data && oldData) {
             contacts = JSON.parse(oldData);
             // order プロパティを付与
-            contacts.forEach((c, i) => c.order = i);
+            contacts.forEach((c, i) => { if(c.order === undefined) c.order = i; });
             saveData();
         } else if (data) {
             contacts = JSON.parse(data);
@@ -310,7 +345,7 @@
             card.className = 'card';
             card.innerHTML = `
                 <div class="card-dept">${c.dept || ''}</div>
-                <div class="card-name">${c.name}</div>
+                <div class="card-name" oncontextmenu="handleRightClick(event, '${c.dept || ''}', '${c.name}', '${c.num}')" title="右クリックで着信メモをコピー">${c.name}</div>
                 <div class="card-number">${c.num}</div>
                 <div class="edit-controls">
                     <div class="reorder-btns" style="width:100%;">
@@ -322,6 +357,33 @@
             `;
             container.appendChild(card);
         });
+    }
+
+    // --- 右クリックでコピー ---
+    window.handleRightClick = function(event, dept, name, num) {
+        event.preventDefault(); // デフォルトのコンテキストメニューを無効化
+        
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const timeStr = `${hours}:${minutes}`;
+        
+        // 要求仕様: 【今の時間「部署名」の「名前」さんから電話がありました。内線番号は「電話番号」です。】
+        const textToCopy = `【${timeStr} 「${dept}」の「${name}」さんから電話がありました。内線番号は「${num}」です。】`;
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast("着信メモをコピーしました📋");
+        }).catch(err => {
+            console.error('コピーに失敗しました', err);
+            alert("コピーに失敗しました。");
+        });
+    };
+
+    function showToast(message) {
+        const x = document.getElementById("toast");
+        x.textContent = message;
+        x.className = "show";
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
     }
 
     // --- 並び替えロジック ---
@@ -360,7 +422,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `phonebook_v4_data_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `phonebook_v5_data_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -392,20 +454,20 @@
     document.getElementById('toggle-edit').onclick = function() {
         editMode = !editMode;
         document.body.classList.toggle('edit-mode', editMode);
-        // add-btn は CSS で .admin-menu 全体が表示されるので、ここでの制御は不要（常に .admin-menu 内にあるため）
-        // ただし、admin-menuはflexになるので、add-btn自体のdisplay:none制御は削除するか、admin-menuに委ねる
         this.textContent = editMode ? '✅ 完了' : '⚙️ 編集';
         render();
     };
 
     const modal = document.getElementById('modal');
-    function openModal(id = null) {
+    window.openModal = function(id = null) {
         currentEditId = id;
-        const c = contacts.find(x => x.id === id);
+        // idがある場合はcontactsから検索、なければundefined
+        const c = id ? contacts.find(x => x.id === id) : undefined;
+        
         document.getElementById('modal-title').textContent = id ? "編集" : "新規登録";
         document.getElementById('in-dept').value = c ? (c.dept || "") : "";
-        document.getElementById('in-name').value = c ? c.name : "";
-        document.getElementById('in-num').value = c ? c.num : "";
+        document.getElementById('in-name').value = c ? (c.name || "") : "";
+        document.getElementById('in-num').value = c ? (c.num || "") : "";
         document.getElementById('delete-btn').style.display = id ? "block" : "none";
         modal.style.display = 'flex';
         document.getElementById('in-name').focus();
@@ -422,7 +484,9 @@
 
         if (currentEditId) {
             const idx = contacts.findIndex(x => x.id === currentEditId);
-            contacts[idx] = { ...contacts[idx], dept, name, num };
+            if (idx !== -1) {
+                contacts[idx] = { ...contacts[idx], dept, name, num };
+            }
         } else {
             const maxOrder = contacts.reduce((max, c) => Math.max(max, c.order || 0), -1);
             contacts.push({ id: Date.now(), dept, name, num, order: maxOrder + 1 });
