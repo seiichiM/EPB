@@ -204,12 +204,12 @@
 
         .toast {
             visibility: hidden;
-            min-width: 200px;
+            min-width: 250px;
             background-color: #333;
             color: #fff;
             text-align: center;
             border-radius: 25px;
-            padding: 10px;
+            padding: 12px;
             position: fixed;
             z-index: 1001;
             bottom: 30px;
@@ -217,6 +217,7 @@
             transform: translateX(-50%);
             opacity: 0;
             transition: opacity 0.3s, bottom 0.3s;
+            font-size: 14px;
         }
         .toast.show {
             visibility: visible;
@@ -314,7 +315,7 @@
         const toast = document.getElementById('toast');
         toast.textContent = text;
         toast.className = 'toast show';
-        setTimeout(() => { toast.className = 'toast'; }, 2000);
+        setTimeout(() => { toast.className = 'toast'; }, 2500);
     }
 
     function render() {
@@ -351,16 +352,22 @@
                 </div>
             `;
 
-            // 右クリックで名前をコピー
+            // 右クリックで定型文をコピー
             card.oncontextmenu = (e) => {
                 if (editMode) return;
                 e.preventDefault();
                 
-                // 名前が4文字以上ならそのまま、3文字以下なら「さん」を付ける
-                const copyText = c.name.length >= 4 ? c.name : c.name + "さん";
+                const now = new Date();
+                const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+                
+                // 名前が4文字以上なら敬称なし、3文字以下なら「さん」
+                const nameWithHonorific = c.name.length >= 4 ? c.name : c.name + "さん";
+                const deptStr = c.dept ? ` (${c.dept})` : "";
+                
+                const copyText = `${timeStr} ${nameWithHonorific}${deptStr}から電話がありました。内線番号は${c.num}です。`;
                 
                 navigator.clipboard.writeText(copyText).then(() => {
-                    showToast(copyText + " をコピーしました");
+                    showToast("メッセージをコピーしました");
                 });
             };
 
