@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内線電話帳 v4 (Reorder)</title>
+    <title>内線電話帳 v5</title>
     <style>
         :root {
             --bg-color: #f4f7f6;
@@ -93,7 +93,6 @@
             gap: 15px;
         }
 
-        /* 並び替え時は部署タイトルを非表示にする（混乱を防ぐため） */
         body.edit-mode .dept-title { display: none; }
 
         .dept-title {
@@ -118,7 +117,9 @@
             position: relative;
             cursor: pointer;
             user-select: none;
+            transition: transform 0.1s;
         }
+        .card:active { transform: scale(0.98); }
 
         .card-dept {
             font-size: 14px;
@@ -148,7 +149,7 @@
             flex-wrap: wrap;
         }
         body.edit-mode .edit-controls { display: flex; }
-        body.edit-mode .card { border: 2px dashed var(--accent-color); }
+        body.edit-mode .card { border: 2px dashed var(--accent-color); cursor: default; }
 
         .reorder-btns {
             display: flex;
@@ -196,20 +197,14 @@
             box-sizing: border-box;
         }
 
-        @media (max-width: 600px) {
-            .card-name { font-size: 24px; }
-            .card-number { font-size: 38px; }
-            .header-content { width: 98%; }
-        }
-
         .toast {
             visibility: hidden;
-            min-width: 250px;
-            background-color: #333;
+            min-width: 280px;
+            background-color: #2c3e50;
             color: #fff;
             text-align: center;
-            border-radius: 25px;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 15px;
             position: fixed;
             z-index: 1001;
             bottom: 30px;
@@ -218,11 +213,18 @@
             opacity: 0;
             transition: opacity 0.3s, bottom 0.3s;
             font-size: 14px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
         .toast.show {
             visibility: visible;
             opacity: 1;
             bottom: 50px;
+        }
+
+        @media (max-width: 600px) {
+            .card-name { font-size: 24px; }
+            .card-number { font-size: 38px; }
+            .header-content { width: 98%; }
         }
     </style>
 
@@ -276,7 +278,7 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'ext_phonebook_data_v4';
+    const STORAGE_KEY = 'ext_phonebook_data_v4'; // v4のデータを引き継ぐ
     let contacts = [];
     let editMode = false;
     let currentEditId = null;
@@ -293,7 +295,6 @@
     function loadData() {
         const data = localStorage.getItem(STORAGE_KEY);
         const oldData = localStorage.getItem('ext_phonebook_data_v3') || localStorage.getItem('ext_phonebook_data_v2');
-        
         if (!data && oldData) {
             contacts = JSON.parse(oldData);
             contacts.forEach((c, i) => c.order = i);
@@ -315,7 +316,7 @@
         const toast = document.getElementById('toast');
         toast.textContent = text;
         toast.className = 'toast show';
-        setTimeout(() => { toast.className = 'toast'; }, 2500);
+        setTimeout(() => { toast.className = 'toast'; }, 3000);
     }
 
     function render() {
@@ -352,7 +353,7 @@
                 </div>
             `;
 
-            // 右クリックで定型文をコピー
+            // 右クリックコピー機能
             card.oncontextmenu = (e) => {
                 if (editMode) return;
                 e.preventDefault();
@@ -362,12 +363,13 @@
                 
                 // 名前が4文字以上なら敬称なし、3文字以下なら「さん」
                 const nameWithHonorific = c.name.length >= 4 ? c.name : c.name + "さん";
-                const deptStr = c.dept ? ` (${c.dept})` : "";
+                const deptPart = c.dept ? `${c.dept}の` : "";
                 
-                const copyText = `${timeStr} ${nameWithHonorific}${deptStr}から電話がありました。内線番号は${c.num}です。`;
+                // フォーマット: 「今の時間」 所属の〇〇さんから電話がありました。内線番号は◯◯です。
+                const copyText = `${timeStr} ${deptPart}${nameWithHonorific}から電話がありました。内線番号は${c.num}です。`;
                 
                 navigator.clipboard.writeText(copyText).then(() => {
-                    showToast("メッセージをコピーしました");
+                    showToast("コピー完了: " + copyText);
                 });
             };
 
@@ -386,7 +388,7 @@
     };
 
     document.getElementById('reset-sort-btn').onclick = function() {
-        if (!confirm("部署・名前順で並び替えてよろしいですか？現在の自由な並び順はリセットされます。")) return;
+        if (!confirm("部署・名前順で並び替えてよろしいですか？")) return;
         contacts.sort((a, b) => {
             const deptComp = (a.dept || "").localeCompare(b.dept || "", 'ja');
             return deptComp !== 0 ? deptComp : (a.name || "").localeCompare(b.name || "", 'ja');
@@ -401,7 +403,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `phonebook_v4_data_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `phonebook_v5_data_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };
